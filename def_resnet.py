@@ -1,5 +1,5 @@
 import torch.nn as nn
-from .defconv import DefC
+from defconv import DefC
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
     return DefC(in_planes, out_planes, kernel_size=3, stride=stride,
                         padding=dilation, bias=False)

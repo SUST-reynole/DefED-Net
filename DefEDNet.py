@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .def_resnet import def_resnet34
+from def_resnet import def_resnet34
 from functools import partial
-from .defconv import DefC
+from defconv import DefC
 
 class SeparableConv2d(nn.Module):
     def __init__(self,in_channels,out_channels,kernel_size=1,stride=1,padding=0,dilation=1,bias=False):
@@ -131,8 +131,8 @@ class DefED_Net(nn.Module):
         self.sconv = DefC(64,64,3,2,1)
 
 
-        self.xe4 = DefC(64,64,3,4)
-        self.xe3 = DefC(64,64,3,2,1)
+        self.xe4 = DefC(256,256,3)
+        self.xe3 = DefC(128,128,3,2,1)
         self.xe2 = DefC(64,64,3,1,1)
 
         self.encoder1 = def_resnet.layer1
@@ -144,8 +144,8 @@ class DefED_Net(nn.Module):
         self.ladder_aspp = Ladder_ASPP(512)
 
         self.decoder4 = DecoderBlock(1024, 512)
-        self.decoder3 = DecoderBlock(576, 256)
-        self.decoder2 = DecoderBlock(320, 128)
+        self.decoder3 = DecoderBlock(768, 256)
+        self.decoder2 = DecoderBlock(384, 128)
         self.decoder1 = DecoderBlock(192, 64)
 
         self.finaldeconv1 = nn.ConvTranspose2d(filters[0], 32, 4, 2, 1)
@@ -154,39 +154,44 @@ class DefED_Net(nn.Module):
         self.finalrelu2 = nonlinearity
         self.finalconv3 = SeparableConv2d(32, num_classes, 3, padding=1)
 
+        self.drop = nn.Dropout2d(0.5)
+
     def forward(self, x):
         # Encoder
-        x = self.firstconv(x)
-        x = self.firstbn(x)
-        x = self.firstrelu(x)
-        x_p = self.sconv(x)
-        x_p = self.drop(x_p)
+        x = self.firstconv(x)   # 1,64,128,128
+        x = self.firstbn(x)   # 1,64,128,128
+        x = self.firstrelu(x)   # 1,64,128,128
+        x_p = self.sconv(x)   # 1,64,128,128
+        x_p = self.drop(x_p)   # 1,64,128,128
 
-        xe_4 = self.xe4(x_p)
-        xe_3 = self.xe3(x_p)
-        xe_2 = self.xe2(x_p)
-        
-        e1 = self.encoder1(x_p)
-        e1 = self.drop(e1)
-        e2 = self.encoder2(e1)
+
+        e1 = self.encoder1(x_p)   # 1,64,128,128
+        e1 = self.drop(e1)   # 1,64,128,128
+        xe_2 = self.xe2(e1)   # 1,64,128,128
+
+        e2 = self.encoder2(e1)   # 1,128,64,64
         e2 = self.drop(e2)
-        e3 = self.encoder3(e2)
+        xe_3 = self.xe3(e2)  # 1,128,64,64
+
+        e3 = self.encoder3(e2)   # 1,256,32,32
         e3 = self.drop(e3)
-        e4 = self.encoder4(e3)
+        xe_4 = self.xe4(e3)   # 1,256,32,32
+
+        e4 = self.encoder4(e3)   # 1,512,16,16
         e4 = self.drop(e4)
 
         # Center
-        e4 = self.ladder_aspp(e4)
+        e4 = self.ladder_aspp(e4)   # 1,1024,16,16
 
 
         # Decoder
-        d4 = self.decoder4(e4)
+        d4 = self.decoder4(e4)   # 1,512,32,32
         d4 = self.drop(d4)
-        d3 = self.decoder3(torch.cat([d4,xe_4],1))
-        d3 = self.drop(d3)
-        d2 = self.decoder2(torch.cat([d3,xe_3],1))
-        d2 = self.drop(d2)
-        d1 = self.decoder1(torch.cat([d2,xe_2],1))
+        d3 = self.decoder3(torch.cat([d4,xe_4],1))  # 512 256
+        d3 = self.drop(d3)  # 1,256,64,64
+        d2 = self.decoder2(torch.cat([d3,xe_3],1))  # 256 128
+        d2 = self.drop(d2)  # 1,128,128,128
+        d1 = self.decoder1(torch.cat([d2,xe_2],1))  # 128 64
         d1 = self.drop(d1)
 
         out = self.finaldeconv1(d1)
@@ -196,3 +201,4 @@ class DefED_Net(nn.Module):
         out = self.finalconv3(out)
 
         return F.sigmoid(out)
+

@@ -24,8 +24,8 @@ class DefC(nn.Module):
         self.conv = SeparableConv2d(inc, outc, kernel_size=kernel_size, stride=kernel_size, bias=bias) 
 
         self.p_conv = SeparableConv2d(inc, 2*kernel_size*kernel_size, kernel_size=3, padding=1, stride=stride)
-        nn.init.constant_(self.p_conv.weight, 0)
-        self.p_conv.register_backward_hook(self._set_lr)
+        # nn.init.constant_(self.p_conv.weight, 0)
+        # self.p_conv.register_backward_hook(self._set_lr)
 
     def forward(self, x):
         offset = self.p_conv(x)
@@ -69,11 +69,11 @@ class DefC(nn.Module):
                    g_rt.unsqueeze(dim=1) * x_q_rt
 
         # modulation
-        if self.modulation:
-            m = m.contiguous().permute(0, 2, 3, 1)
-            m = m.unsqueeze(dim=1)
-            m = torch.cat([m for _ in range(x_offset.size(1))], dim=1)
-            x_offset *= m
+        # if self.modulation:
+        #     m = m.contiguous().permute(0, 2, 3, 1)
+        #     m = m.unsqueeze(dim=1)
+        #     m = torch.cat([m for _ in range(x_offset.size(1))], dim=1)
+        #     x_offset *= m
 
         x_offset = self._reshape_x_offset(x_offset, ks)
         out = self.conv(x_offset)
